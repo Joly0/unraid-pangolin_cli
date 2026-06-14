@@ -1,0 +1,7 @@
+/var/log/pangolin_cli.log {
+   daily
+   rotate 4
+   notifempty
+   missingok
+   copytruncate
+}

@@ -1,0 +1,116 @@
+Menu="NetworkServices"
+Title="Pangolin CLI"
+Icon="pangolin_cli.png"
+---
+<?php
+/* Pangolin CLI - settings page
+ *
+ * Connects this Unraid server to a Pangolin instance as a machine client so
+ * that private resources can be reached on this host. Settings are saved to
+ * /boot/config/plugins/pangolin_cli/pangolin_cli.cfg via /update.php and the
+ * service is controlled through /etc/rc.d/rc.pangolin.
+ */
+$plugin = "pangolin_cli";
+$cfg    = parse_plugin_cfg($plugin, true);
+$bin    = "/usr/local/bin/pangolin";
+$rc     = "/etc/rc.d/rc.pangolin";
+
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/plugins/$plugin/include/log.php";
+
+$installed = is_file($bin);
+$cliVer    = $installed ? trim(shell_exec("$bin version 2>/dev/null | head -n1")) : _("not installed");
+$running   = trim(shell_exec("$rc status 2>/dev/null | tail -n1")) == "running";
+$details   = $running ? htmlspecialchars(shell_exec("$bin status 2>/dev/null")) : "";
+$logLines  = pangolin_log_tail(50);
+$logHtml   = pangolin_log_render($logLines);
+
+$ENDPOINT      = htmlspecialchars($cfg['ENDPOINT']      ?? '');
+$CLIENT_ID     = htmlspecialchars($cfg['CLIENT_ID']     ?? '');
+$CLIENT_SECRET = htmlspecialchars($cfg['CLIENT_SECRET'] ?? '');
+$AUTOSTART     = ($cfg['AUTOSTART'] ?? 'no');
+$OVERRIDE_DNS  = ($cfg['OVERRIDE_DNS'] ?? 'yes');
+$EXTRA_ARGS    = htmlspecialchars($cfg['EXTRA_ARGS']    ?? '');
+
+$stateColor = $running ? 'green-text'  : 'orange-text';
+$stateText  = $running ? _('Connected') : _('Disconnected');
+$fieldStyle = 'width:360px;max-width:100%;';
+?>
+
+<form markdown="1" name="pangolin_settings" method="POST" action="/update.php" target="progressFrame">
+<input type="hidden" name="#file"    value="pangolin_cli/pangolin_cli.cfg">
+<input type="hidden" name="#command" value="plugins/pangolin_cli/scripts/rc.pangolin">
+<input type="hidden" name="#arg[1]"  id="rcArg" value="apply">
+
+_(Status)_:
+: <span class="<?=$stateColor?>" style="font-weight:bold;"><i class="fa fa-circle"></i> <?=$stateText?></span> &nbsp; <span style="opacity:.7;"><?=_('Version')?>: <?=$cliVer?></span>
+
+_(Pangolin endpoint URL)_:
+: <input type="text" name="ENDPOINT" style="<?=$fieldStyle?>" value="<?=$ENDPOINT?>" placeholder="https://pangolin.example.com">
+
+> The base URL of your Pangolin instance — the same address you open the dashboard with. For Pangolin Cloud use `https://app.pangolin.net`. Include `https://` and no trailing path. <a href="https://docs.pangolin.net/manage/clients/install-client" target="_blank">CLI docs ↗</a>
+
+_(Client ID)_:
+: <input type="text" name="CLIENT_ID" style="<?=$fieldStyle?>" value="<?=$CLIENT_ID?>" placeholder="client id">
+
+> The public identifier of a **machine client**. In the Pangolin dashboard go to **Clients → Add Client** and create a *machine* client (these connect headlessly, without an interactive login). Copy the generated **Client ID** here, and remember to **enable/activate** the client in the dashboard. <a href="https://docs.pangolin.net/manage/clients/install-client" target="_blank">Client docs ↗</a>
+
+_(Client secret)_:
+: <input type="password" name="CLIENT_SECRET" style="<?=$fieldStyle?>" value="<?=$CLIENT_SECRET?>" placeholder="client secret">
+
+> The secret generated together with the Client ID when the machine client is created. It is shown only once in the dashboard, so copy it immediately — treat it like a password. **Note:** the CLI passes this on its command line, so it is visible in the server's process list to local root.
+
+_(Start automatically on boot)_:
+: <select name="AUTOSTART" size="1" style="<?=$fieldStyle?>">
+  <option value="yes" <?=$AUTOSTART=='yes'?'selected':''?>><?=_('Yes')?></option>
+  <option value="no"  <?=$AUTOSTART=='no' ?'selected':''?>><?=_('No')?></option>
+  </select>
+
+> When set to **Yes**, the client connects automatically every time the server boots. When **No**, connect manually with the buttons below.
+
+_(Override system DNS)_:
+: <select name="OVERRIDE_DNS" size="1" style="<?=$fieldStyle?>">
+  <option value="yes" <?=$OVERRIDE_DNS=='yes'?'selected':''?>><?=_('Yes')?></option>
+  <option value="no"  <?=$OVERRIDE_DNS=='no' ?'selected':''?>><?=_('No')?></option>
+  </select>
+
+> Keep this **Yes** (default) to resolve Pangolin **aliases** (friendly hostnames for your resources). The client points `/etc/resolv.conf` at its own resolver and forwards everything else to your upstream DNS. Set to **No** only if you'd rather leave the system resolver untouched and reach resources by their Pangolin IP. <br>**Note:** Pangolin's tunnel uses the `100.64.0.0/10` range, which Tailscale's firewall drops by default; this plugin automatically allows the tunnel interface so DNS works even with Tailscale installed. <a href="https://docs.pangolin.net/manage/clients/configure-client" target="_blank">DNS docs ↗</a>
+
+_(Additional arguments)_:
+: <input type="text" name="EXTRA_ARGS" style="<?=$fieldStyle?>" value="<?=$EXTRA_ARGS?>" placeholder="--mtu 1280 --upstream-dns=1.1.1.1">
+
+> Optional extra flags appended to `pangolin up`. Run `pangolin up --help` in an Unraid terminal for the full list. Common ones: `--mtu 1280` (tune packet size), `--interface-name pangolin` (WireGuard interface name), `--override-dns=false` (don't override the system DNS), `--tunnel-dns` (resolve DNS through the tunnel), `--mv` (verbose logging). <a href="https://docs.pangolin.net/manage/clients/install-client" target="_blank">CLI docs ↗</a>
+
+&nbsp;
+: <input type="submit" style="<?=$fieldStyle?>" value="_(Apply)_" onclick="document.getElementById('rcArg').value='apply';"<?=$installed?'':' disabled'?>>
+<?if ($running):?><input type="submit" style="<?=$fieldStyle?>" value="_(Disconnect)_" onclick="document.getElementById('rcArg').value='stop';">
+<?else:?><input type="submit" style="<?=$fieldStyle?>" value="_(Connect)_" onclick="document.getElementById('rcArg').value='start';"<?=$installed?'':' disabled'?>>
+<?endif;?>
+<input type="button" style="<?=$fieldStyle?>" value="_(Done)_" onclick="done()">
+</form>
+
+<?if (!$installed):?>
+<blockquote class="orange-text"><?=_('The Pangolin CLI binary is not installed. Reinstall the plugin or check your internet connection.')?></blockquote>
+<?endif;?>
+
+<?if ($details):?>
+<table class="tablesorter shift ups"><thead><tr><th><?=_('Connection details')?></th></tr></thead></table>
+<pre style="max-height:200px;overflow:auto;"><?=$details?></pre>
+<?endif;?>
+
+<style>
+  pre.pangolin-log{max-height:300px;overflow:auto;}
+  pre.pangolin-log span{display:block;padding:0 4px;}
+  pre.pangolin-log span.pangolin-connect{color:var(--green-800);background:var(--green-100);font-weight:bold;}
+  pre.pangolin-log span.pangolin-disconnect{font-weight:bold;opacity:.85;}
+</style>
+
+<table class="tablesorter shift ups"><thead><tr><th><?=_('Recent log')?>
+  &nbsp; <a href="/plugins/pangolin_cli/include/logwin.php" target="_blank"
+    onclick="window.open(this.href,'pangolin_log','width=900,height=600,scrollbars=yes,resizable=yes');return false;"><?=_('View full log')?> &#8599;</a>
+</th></tr></thead></table>
+<?if ($logHtml):?>
+<pre class="pangolin-log"><?=$logHtml?></pre>
+<?else:?>
+<pre class="pangolin-log"><span class="text" style="opacity:.7;"><?=_('No log entries yet.')?></span></pre>
+<?endif;?>

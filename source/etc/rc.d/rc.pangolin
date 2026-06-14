@@ -1,0 +1,197 @@
+#!/bin/bash
+#
+# rc.pangolin - service control for the Pangolin CLI machine client on Unraid
+#
+# The Pangolin CLI connects this server to a Pangolin instance as a machine
+# client so that private resources can be reached on this host. Connection
+# settings are managed from Settings > Pangolin CLI in the webGui and stored
+# in the plugin .cfg on the flash drive.
+#
+# Usage: rc.pangolin {start|stop|restart|status|autostart}
+#
+
+PLUGIN="pangolin_cli"
+CFG="/boot/config/plugins/${PLUGIN}/${PLUGIN}.cfg"
+BIN="/usr/local/bin/pangolin"
+PERSIST="/boot/config/plugins/${PLUGIN}/pangolin"
+PIDFILE="/var/run/${PLUGIN}.pid"
+LOG="/var/log/${PLUGIN}.log"
+RESOLV="/etc/resolv.conf"
+RESOLV_BAK="/var/run/${PLUGIN}.resolv.backup"
+
+# Defaults (overridden by the webGui settings below)
+ENDPOINT=""
+CLIENT_ID=""
+CLIENT_SECRET=""
+AUTOSTART="no"
+# Whether the client takes over the system resolver to resolve Pangolin
+# aliases (the CLI's own default is on). Kept on by default; see the firewall
+# note in fw_allow() for why this works alongside Tailscale on Unraid.
+OVERRIDE_DNS="yes"
+EXTRA_ARGS=""
+
+# Load settings written by the webGui (KEY="value" lines)
+[ -f "$CFG" ] && . "$CFG"
+
+# WireGuard interface name olm uses (default "pangolin"); honour an override
+# passed through EXTRA_ARGS so the firewall rule targets the right interface.
+IFACE=$(printf '%s' " $EXTRA_ARGS " | grep -oE -- '--interface-name[ =][^ ]+' | head -n1 | sed -E 's/--interface-name[ =]//')
+[ -z "$IFACE" ] && IFACE="pangolin"
+
+ensure_bin() {
+  # Unraid's root filesystem lives in RAM and is rebuilt on every boot, so the
+  # binary is kept on the flash drive and restored to PATH when missing.
+  if [ ! -x "$BIN" ] && [ -s "$PERSIST" ]; then
+    install -D -m 0755 "$PERSIST" "$BIN"
+  fi
+}
+
+ensure_tun() {
+  # Pangolin needs a TUN device to bring up its WireGuard interface.
+  /sbin/modprobe tun 2>/dev/null
+  if [ ! -c /dev/net/tun ]; then
+    mkdir -p /dev/net
+    mknod /dev/net/tun c 10 200 2>/dev/null
+    chmod 0600 /dev/net/tun
+  fi
+}
+
+log_marker() {
+  # Write a clearly-formatted banner line to the log so connect/disconnect
+  # events stand out. The webGui log viewer highlights these lines.
+  printf '%s ==== %s ====\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >> "$LOG"
+}
+
+fw_allow() {
+  # Pangolin's tunnel uses the 100.64.0.0/10 CGNAT range (interface "pangolin",
+  # DNS resolver 100.96.128.1). If Tailscale is also installed it adds a
+  # ts-input rule that DROPs any 100.64.0.0/10 source not arriving on its own
+  # interface - which silently drops Pangolin's replies (most visibly the DNS
+  # resolver's answers, breaking name resolution). Accept input from our tunnel
+  # interface before that chain runs. Harmless when Tailscale is absent.
+  for ipt in iptables ip6tables; do
+    command -v "$ipt" >/dev/null 2>&1 || continue
+    "$ipt" -C INPUT -i "$IFACE" -j ACCEPT 2>/dev/null || \
+      "$ipt" -I INPUT 1 -i "$IFACE" -j ACCEPT 2>/dev/null
+  done
+}
+
+fw_remove() {
+  for ipt in iptables ip6tables; do
+    command -v "$ipt" >/dev/null 2>&1 || continue
+    # Remove every copy in case a previous run left duplicates.
+    while "$ipt" -C INPUT -i "$IFACE" -j ACCEPT 2>/dev/null; do
+      "$ipt" -D INPUT -i "$IFACE" -j ACCEPT 2>/dev/null || break
+    done
+  done
+}
+
+fw_heal() {
+  # Cheap periodic check (called from cron). Does nothing unless the client is
+  # connected AND our rule has been bumped from the top of INPUT (e.g. after a
+  # Tailscale restart re-inserts its own jump above ours). Only then re-assert.
+  is_running || return 0
+  [ "$(iptables -S INPUT 2>/dev/null | grep -m1 '^-A')" = "-A INPUT -i $IFACE -j ACCEPT" ] && return 0
+  fw_remove
+  fw_allow
+}
+
+pid_alive() {
+  [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE" 2>/dev/null)" 2>/dev/null
+}
+
+is_running() {
+  pid_alive && return 0
+  pgrep -f "${BIN} up" >/dev/null 2>&1
+}
+
+start() {
+  ensure_bin
+  if [ ! -x "$BIN" ]; then
+    echo "Pangolin CLI binary not found at ${BIN}"
+    return 1
+  fi
+  if is_running; then
+    echo "Pangolin CLI is already connected"
+    return 0
+  fi
+  if [ -z "$ENDPOINT" ] || [ -z "$CLIENT_ID" ] || [ -z "$CLIENT_SECRET" ]; then
+    echo "Missing endpoint / client id / client secret - configure in Settings > Pangolin CLI"
+    return 1
+  fi
+  ensure_tun
+  # Make sure the tunnel interface's traffic isn't dropped by Tailscale's
+  # CGNAT anti-spoof rule (see fw_allow).
+  fw_allow
+  # Back up the working resolver before the client may rewrite it. The client's
+  # own DNS restore is unreliable (it can log "no backup file exists" on stop),
+  # so we keep our own copy to guarantee DNS is restored on disconnect.
+  cp -a "$RESOLV" "$RESOLV_BAK" 2>/dev/null
+  # The CLI overrides system DNS by default to resolve Pangolin aliases. Allow
+  # turning it off; EXTRA_ARGS (below) can still override either way.
+  local dns_flag="--override-dns=true"
+  [ "$OVERRIDE_DNS" = "no" ] && dns_flag="--override-dns=false"
+  echo "Connecting to ${ENDPOINT} ..."
+  log_marker "Pangolin client connecting to ${ENDPOINT}"
+  # EXTRA_ARGS comes last so an explicit user flag overrides our DNS default.
+  nohup "$BIN" up \
+    --endpoint "$ENDPOINT" \
+    --id "$CLIENT_ID" \
+    --secret "$CLIENT_SECRET" \
+    --attach $dns_flag $EXTRA_ARGS >> "$LOG" 2>&1 &
+  echo $! > "$PIDFILE"
+  sleep 2
+  if is_running; then
+    echo "Pangolin CLI connected"
+  else
+    echo "Pangolin CLI failed to start - check ${LOG}"
+    rm -f "$PIDFILE"
+    return 1
+  fi
+}
+
+stop() {
+  echo "Disconnecting Pangolin CLI ..."
+  log_marker "Pangolin client disconnecting"
+  [ -x "$BIN" ] && "$BIN" down >/dev/null 2>&1
+  # Kill the watchdog first - otherwise it respawns the client we are stopping.
+  pkill -f "${BIN} watchdog" 2>/dev/null
+  if [ -f "$PIDFILE" ]; then
+    kill "$(cat "$PIDFILE" 2>/dev/null)" 2>/dev/null
+    rm -f "$PIDFILE"
+  fi
+  pkill -f "${BIN} up" 2>/dev/null
+  # Force-kill anything still alive after a short grace period.
+  sleep 1
+  pkill -9 -f "${BIN} watchdog" 2>/dev/null
+  pkill -9 -f "${BIN} up" 2>/dev/null
+  # Safety net: if the client left the resolver pointing at its own DNS manager
+  # (its restore can fail), put our backed-up resolv.conf back so the server
+  # keeps working DNS after disconnect.
+  if grep -q "Olm DNS Manager" "$RESOLV" 2>/dev/null && [ -s "$RESOLV_BAK" ]; then
+    cp -a "$RESOLV_BAK" "$RESOLV" 2>/dev/null
+    echo "Restored system DNS"
+  fi
+  # Drop the firewall allowance we added on start.
+  fw_remove
+  echo "Pangolin CLI disconnected"
+}
+
+status() {
+  if is_running; then
+    echo "running"
+  else
+    echo "stopped"
+  fi
+}
+
+case "$1" in
+  start)     start ;;
+  stop)      stop ;;
+  restart)   stop; sleep 1; start ;;
+  apply)     if is_running; then stop; sleep 1; start; else echo "Settings saved"; fi ;;
+  status)    status ;;
+  autostart) [ "$AUTOSTART" = "yes" ] && start || echo "Autostart is disabled" ;;
+  fw-heal)   fw_heal ;;
+  *) echo "Usage: $0 {start|stop|restart|apply|status|autostart|fw-heal}"; exit 1 ;;
+esac

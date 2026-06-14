@@ -1,0 +1,37 @@
+#!/bin/bash
+#
+# build.sh - package the source/ tree into an Unraid .txz and update the .plg MD5.
+#
+# Produces packages/pangolin_cli-<version>.txz where <version> is read from the
+# .plg, then writes the package MD5 back into the .plg so the two stay in sync.
+#
+set -euo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+NAME="pangolin_cli"
+PLG="${HERE}/${NAME}.plg"
+SRC="${HERE}/source"
+OUT="${HERE}/packages"
+
+VERSION="$(grep -oP '<!ENTITY version\s+"\K[^"]+' "$PLG")"
+TXZ="${OUT}/${NAME}-${VERSION}.txz"
+
+mkdir -p "$OUT"
+
+# Executable bits for shipped scripts.
+chmod 0755 "${SRC}/etc/rc.d/rc.pangolin"
+
+# Remove stale packages of other versions.
+find "$OUT" -maxdepth 1 -name "${NAME}-*.txz" ! -name "$(basename "$TXZ")" -delete 2>/dev/null || true
+
+# Build the package. Slackware packages are xz tarballs rooted at /.
+echo "Building ${TXZ} ..."
+( cd "$SRC" && tar --owner=0 --group=0 -cJf "$TXZ" . )
+
+MD5="$(md5sum "$TXZ" | cut -d' ' -f1)"
+echo "Package MD5: ${MD5}"
+
+# Update the MD5 entity in the .plg.
+sed -i -E "s#(<!ENTITY md5\s+\")[^\"]*(\">)#\1${MD5}\2#" "$PLG"
+echo "Updated ${NAME}.plg with new MD5."
+echo "Done."

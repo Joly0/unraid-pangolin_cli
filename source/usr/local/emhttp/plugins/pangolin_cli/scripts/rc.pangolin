@@ -1,0 +1,9 @@
+#!/bin/bash
+#
+# webGui wrapper for the Pangolin CLI service control.
+#
+# /update.php only runs a #command that resolves inside the webGui docroot
+# (/usr/local/emhttp), so the settings page calls this wrapper, which simply
+# forwards to the real service script in /etc/rc.d.
+#
+exec /etc/rc.d/rc.pangolin "$@"

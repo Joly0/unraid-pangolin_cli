@@ -1,0 +1,39 @@
+unraid-pangolin_cli
+Copyright (c) 2026 Joly0 and contributors
+
+This is an unofficial, community-maintained Unraid plugin. It is NOT affiliated
+with, sponsored by, or endorsed by Fossorial, Inc.
+
+------------------------------------------------------------------------------
+Trademarks
+------------------------------------------------------------------------------
+"Pangolin" and the Pangolin logo are trademarks of Fossorial, Inc. All rights
+to those marks remain with Fossorial, Inc. Their use in this project is for
+identification and reference only (nominative use) to indicate that this plugin
+installs and integrates with the Pangolin software; it does not imply any
+affiliation with or endorsement by Fossorial, Inc.
+
+------------------------------------------------------------------------------
+Bundled logo image
+------------------------------------------------------------------------------
+File: source/usr/local/emhttp/plugins/pangolin_cli/pangolin_cli.png
+
+This image is the Pangolin logo, the property of Fossorial, Inc. It was obtained
+from the fosrl/pangolin repository (public/logo/pangolin_orange_96x96.png):
+  https://github.com/fosrl/pangolin
+That repository licenses unheadered files under the GNU Affero General Public
+License, Version 3 (AGPL-3.0), with commercial licensing available from
+Fossorial, Inc. The logo is used here only as the plugin's icon to identify the
+Pangolin software.
+
+If you are the rights holder and would prefer the logo not be redistributed in
+this repository, please open an issue and it will be removed/replaced.
+
+------------------------------------------------------------------------------
+Pangolin CLI binary
+------------------------------------------------------------------------------
+The "pangolin" CLI binary installed by this plugin is published by Fossorial,
+Inc. via fosrl/cli ( https://github.com/fosrl/cli ) and is downloaded from its
+official GitHub releases at install time. It is not redistributed in this
+repository and remains subject to its own license (AGPL-3.0, with commercial
+licensing available from Fossorial, Inc.).

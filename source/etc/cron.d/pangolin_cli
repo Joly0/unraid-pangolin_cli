@@ -1,0 +1,5 @@
+# Re-assert the Pangolin firewall allowance in case Tailscale (or another
+# tool) re-inserts its own rules above ours after a restart. This is a cheap
+# check: it does nothing unless the client is connected AND our rule has been
+# bumped from the top of the INPUT chain.
+*/1 * * * * /etc/rc.d/rc.pangolin fw-heal &> /dev/null

@@ -1,0 +1,106 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN [
+  <!ENTITY name       "pangolin_cli">
+  <!ENTITY author     "Joly0">
+  <!ENTITY version    "2026.06.14">
+  <!ENTITY cliVersion "0.10.1">
+  <!ENTITY gitURL     "https://github.com/&author;/unraid-&name;/raw/main">
+  <!ENTITY pluginURL  "&gitURL;/&name;.plg">
+  <!ENTITY md5        "34306c679c5713bff74e272fb326bbbc">
+  <!ENTITY binURL     "https://github.com/fosrl/cli/releases/download/&cliVersion;/pangolin-cli_linux_amd64">
+  <!ENTITY plugin     "/boot/config/plugins/&name;">
+  <!ENTITY emhttp     "/usr/local/emhttp/plugins/&name;">
+  <!ENTITY binPersist "&plugin;/pangolin">
+  <!ENTITY binTarget  "/usr/local/bin/pangolin">
+]>
+
+<PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="7.0.0" icon="globe">
+
+<CHANGES>
+
+###2026.06.14
+- Initial release. Installs Pangolin CLI &cliVersion; and adds a Settings page to connect this server to a Pangolin instance as a machine client.
+
+</CHANGES>
+
+<!-- Remove older packages from the flash drive -->
+<FILE Run="/bin/bash">
+<INLINE>
+rm -f $(ls /boot/config/plugins/&name;/&name;*.txz 2>/dev/null|grep -v '&version;')
+</INLINE>
+</FILE>
+
+<!-- Download and install the webGui package (settings page + service script) -->
+<FILE Name="&plugin;/&name;-&version;.txz" Run="upgradepkg --install-new">
+<URL>&gitURL;/packages/&name;-&version;.txz</URL>
+<MD5>&md5;</MD5>
+</FILE>
+
+<!-- Install the Pangolin CLI binary.
+     The root filesystem is volatile on Unraid, so the binary is kept on the
+     flash drive and restored to PATH on every boot. It is downloaded once
+     (or whenever the bundled CLI version changes). -->
+<FILE Run="/bin/bash">
+<INLINE>
+mkdir -p &plugin;
+NEED_DOWNLOAD=1
+if [ -s "&binPersist;" ]; then
+  CURRENT="$("&binPersist;" version 2>/dev/null | grep -o '&cliVersion;')"
+  [ -n "$CURRENT" ] &amp;&amp; NEED_DOWNLOAD=0
+fi
+if [ "$NEED_DOWNLOAD" = "1" ]; then
+  echo "Downloading Pangolin CLI &cliVersion; ..."
+  if curl -fsSL -o "&binPersist;.tmp" "&binURL;"; then
+    mv -f "&binPersist;.tmp" "&binPersist;"
+  else
+    rm -f "&binPersist;.tmp"
+    if [ ! -s "&binPersist;" ]; then
+      echo "ERROR: failed to download the Pangolin CLI binary from &binURL;"
+      echo "Check the server's internet connection and reinstall the plugin."
+      exit 1
+    fi
+    echo "WARNING: download failed, keeping the previously installed binary."
+  fi
+fi
+install -D -m 0755 "&binPersist;" "&binTarget;"
+echo "Pangolin CLI installed: $("&binTarget;" version 2>/dev/null | head -n1)"
+</INLINE>
+</FILE>
+
+<!-- Start the client on boot if the user enabled autostart -->
+<FILE Run="/bin/bash">
+<INLINE>
+if [ -x /etc/rc.d/rc.pangolin ]; then
+  /etc/rc.d/rc.pangolin autostart 2>/dev/null
+fi
+</INLINE>
+</FILE>
+
+<!-- Installation complete message -->
+<FILE Run="/bin/bash">
+<INLINE>
+echo ""
+echo "----------------------------------------------------------------"
+echo " Pangolin CLI plugin installed."
+echo " Configure your connection under Settings > Pangolin CLI."
+echo "----------------------------------------------------------------"
+echo ""
+</INLINE>
+</FILE>
+
+<!-- Uninstall -->
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+echo "----------------------------------------"
+echo "------- Uninstalling Pangolin CLI -------"
+echo "----------------------------------------"
+/etc/rc.d/rc.pangolin stop 2>/dev/null
+removepkg &name;-&version; 2>/dev/null
+rm -f &binTarget;
+rm -rf &emhttp;
+rm -rf &plugin;
+echo "Pangolin CLI plugin removed."
+</INLINE>
+</FILE>
+
+</PLUGIN>
