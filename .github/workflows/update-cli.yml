@@ -131,8 +131,8 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
-          # Stage only the intended files (never the transient build artifacts).
-          git add -A -- pangolin_cli.plg packages/
+          # Stage only intended updates/additions; do not stage deletions of older packages.
+          git add pangolin_cli.plg packages/
           git commit -m "Update Pangolin CLI to ${LATEST} (plugin ${NEWVER})"
           git push -f -u origin "$BRANCH"
 
