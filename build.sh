@@ -21,9 +21,6 @@ mkdir -p "$OUT"
 # Executable bits for shipped scripts.
 chmod 0755 "${SRC}/etc/rc.d/rc.pangolin"
 
-# Remove stale packages of other versions.
-find "$OUT" -maxdepth 1 -name "${NAME}-*.txz" ! -name "$(basename "$TXZ")" -delete 2>/dev/null || true
-
 # Build the package. Slackware packages are xz tarballs rooted at /.
 echo "Building ${TXZ} ..."
 ( cd "$SRC" && tar --owner=0 --group=0 -cJf "$TXZ" . )
