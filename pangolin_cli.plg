@@ -2,11 +2,11 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name       "pangolin_cli">
   <!ENTITY author     "Joly0">
-  <!ENTITY version    "2026.07.06">
-  <!ENTITY cliVersion "0.12.0">
+  <!ENTITY version    "2026.07.08">
+  <!ENTITY cliVersion "0.13.0">
   <!ENTITY gitURL     "https://github.com/&author;/unraid-&name;/raw/main">
   <!ENTITY pluginURL  "&gitURL;/&name;.plg">
-  <!ENTITY md5        "0bb3f3d0a3a01f932b5a3fbf5d9a5148">
+  <!ENTITY md5        "f40bdfc986e1d56b0121ab11a9b1e610">
   <!ENTITY binURL     "https://github.com/fosrl/cli/releases/download/&cliVersion;/pangolin-cli_linux_amd64">
   <!ENTITY plugin     "/boot/config/plugins/&name;">
   <!ENTITY emhttp     "/usr/local/emhttp/plugins/&name;">
@@ -17,6 +17,9 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="7.0.0" icon="globe">
 
 <CHANGES>
+
+###2026.07.08
+- Updated Pangolin CLI to 0.13.0.
 
 ###2026.07.06
 - Updated Pangolin CLI to 0.12.0.
