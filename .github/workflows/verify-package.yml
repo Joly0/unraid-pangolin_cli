@@ -1,0 +1,34 @@
+name: Verify package
+
+# Guards the shipped artifact: the txz referenced by the .plg must be present,
+# its scripts executable, files root-owned, and its MD5 in sync with the .plg.
+# This runs on every push/PR so a package built from a working copy that drops
+# exec bits (e.g. an SMB share) can't land on main - installed as 0644, the
+# webGui wrapper makes the settings page Connect button fail silently.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify the package the .plg points at
+        run: |
+          set -euo pipefail
+          VERSION="$(grep -oP '<!ENTITY version\s+"\K[^"]+' pangolin_cli.plg)"
+          TXZ="packages/pangolin_cli-${VERSION}.txz"
+          if [ ! -f "$TXZ" ]; then
+            echo "FAIL: the .plg references version ${VERSION} but ${TXZ} is not committed."
+            exit 1
+          fi
+          bash tests/package-test.sh "$TXZ" pangolin_cli.plg

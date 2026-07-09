@@ -118,6 +118,12 @@ jobs:
           bash build.sh
           echo "Built package for plugin $NEWVER (CLI $LATEST)"
 
+      # No PR is opened unless the rebuilt package is installable (scripts
+      # executable, root-owned, MD5 in sync with the .plg).
+      - name: Verify rebuilt package
+        if: steps.ver.outputs.update == 'true' && steps.smoke.outcome == 'success'
+        run: bash tests/package-test.sh "packages/pangolin_cli-${{ steps.build.outputs.newver }}.txz" pangolin_cli.plg
+
       - name: Create pull request
         if: steps.ver.outputs.update == 'true' && steps.smoke.outcome == 'success'
         env:

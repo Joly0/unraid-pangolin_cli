@@ -18,8 +18,12 @@ TXZ="${OUT}/${NAME}-${VERSION}.txz"
 
 mkdir -p "$OUT"
 
-# Executable bits for shipped scripts.
-chmod 0755 "${SRC}/etc/rc.d/rc.pangolin"
+# Executable bits for shipped scripts. tar packs whatever mode the source
+# tree has (an SMB/FAT working copy drops exec bits), and /update.php runs the
+# webGui wrapper directly - packed as 0644 it makes the Connect button fail
+# silently. So assert the modes here, right before packing.
+chmod 0755 "${SRC}/etc/rc.d/rc.pangolin" \
+           "${SRC}/usr/local/emhttp/plugins/${NAME}/scripts/rc.pangolin"
 
 # Build the package. Slackware packages are xz tarballs rooted at /.
 echo "Building ${TXZ} ..."
