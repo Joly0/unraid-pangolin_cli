@@ -22,13 +22,18 @@ function pangolin_log_files(): array {
 }
 
 /* CSS class for a log line. Connect/disconnect markers are matched first so
- * they win over the generic error/warning keyword rules. */
+ * they win over the error/warning rules. The olm client logs Go-style
+ * line-leading level tokens ("ERROR: 2026/07/12 15:33:06 msg"), so those are
+ * the primary signal; a short keyword fallback catches messages relayed from
+ * elsewhere. Bare 4xx/5xx numbers and routine words (retry, timeout, cannot)
+ * are deliberately not matched - they flagged byte counts and normal
+ * reconnect chatter as errors. */
 function pangolin_log_class(string $line): string {
     $patterns = [
         'pangolin-connect'    => '/====\s*pangolin (client )?(connect|start|up)/i',
         'pangolin-disconnect' => '/====\s*pangolin (client )?(disconnect|stop|down)/i',
-        'error' => '/\b(error|err|fatal|panic|failed|failure|refused|denied|unauthorized|forbidden|timeout|timed out|unreachable|cannot|could not|unable)\b|\b[45]\d\d\b/i',
-        'warn'  => '/\b(warn|warning|retry|retrying|deprecated)\b/i',
+        'error' => '/^(erro|error|fatal|panic):?\s|\b(error|fatal|panic|failed|failure|refused|denied|unauthorized|forbidden)\b/i',
+        'warn'  => '/^(warn|warning):?\s|\b(warn(ing)?|deprecated)\b/i',
     ];
     foreach ($patterns as $class => $re) {
         if (preg_match($re, $line)) {
@@ -49,33 +54,59 @@ function pangolin_log_render(array $lines): string {
     return $out;
 }
 
+/* Last $n lines of one file, reading backwards in 8 KB chunks so a large
+ * (multi-MB verbose) log never gets slurped whole. Line semantics match
+ * file(FILE_IGNORE_NEW_LINES): no trailing newlines in elements, a final
+ * unterminated line is included. */
+function pangolin_tail_file(string $f, int $n): array {
+    if ($n <= 0) {
+        return [];
+    }
+    $fh = @fopen($f, 'rb');
+    if ($fh === false) {
+        return [];
+    }
+    fseek($fh, 0, SEEK_END);
+    $pos = ftell($fh);
+    $buf = '';
+    while ($pos > 0) {
+        $read = min(8192, $pos);
+        $pos -= $read;
+        fseek($fh, $pos, SEEK_SET);
+        $buf = fread($fh, $read) . $buf;
+        /* >$n newlines guarantees the last $n lines are complete even if the
+         * chunk boundary split the first line in $buf. */
+        if (substr_count($buf, "\n") > $n) {
+            break;
+        }
+    }
+    fclose($fh);
+    if ($buf === '') {
+        return [];
+    }
+    $lines = explode("\n", $buf);
+    if (end($lines) === '') {
+        array_pop($lines);   // trailing newline, not an empty last line
+    }
+    return array_slice($lines, -$n);
+}
+
 /* Last $n lines across current + rotated files (newest content kept). */
 function pangolin_log_tail(int $n): array {
     $buf = [];
     foreach (array_reverse(pangolin_log_files()) as $f) {
-        $lines = @file($f, FILE_IGNORE_NEW_LINES);
-        if ($lines === false) {
-            continue;
-        }
-        $buf = array_merge($lines, $buf);
-        if (count($buf) >= $n) {
+        $need = $n - count($buf);
+        if ($need <= 0) {
             break;
         }
+        $buf = array_merge(pangolin_tail_file($f, $need), $buf);
     }
-    return array_slice($buf, -$n);
+    return $buf;
 }
 
-/* All available log lines, optionally capped to the last $max. */
-function pangolin_log_all(int $max = 0): array {
-    $lines = [];
-    foreach (pangolin_log_files() as $f) {
-        $l = @file($f, FILE_IGNORE_NEW_LINES);
-        if ($l !== false) {
-            $lines = array_merge($lines, $l);
-        }
-    }
-    if ($max > 0 && count($lines) > $max) {
-        $lines = array_slice($lines, -$max);
-    }
-    return $lines;
+/* Tail across all files, capped to the last $max lines (default 5000).
+ * Non-positive $max means the default, never unlimited - the popup must not
+ * load an unbounded amount of log into memory. */
+function pangolin_log_all(int $max = 5000): array {
+    return pangolin_log_tail($max > 0 ? $max : 5000);
 }

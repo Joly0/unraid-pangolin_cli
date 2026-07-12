@@ -9,7 +9,10 @@
 $docroot = $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 require_once "$docroot/plugins/pangolin_cli/include/log.php";
 
-$max   = isset($_GET['max']) ? max(0, (int)$_GET['max']) : 5000;
+/* ?max= caps the line count; <=0 falls back to the 5000 default (there is no
+ * "unlimited" - see pangolin_log_all) and 20000 is the hard ceiling. */
+$max   = isset($_GET['max']) ? (int)$_GET['max'] : 5000;
+$max   = min($max > 0 ? $max : 5000, 20000);
 $lines = pangolin_log_all($max);
 ?>
 <!DOCTYPE html>
