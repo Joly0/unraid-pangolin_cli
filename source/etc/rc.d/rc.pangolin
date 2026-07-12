@@ -62,18 +62,37 @@ log_marker() {
   printf '%s ==== %s ====\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >> "$LOG"
 }
 
-fw_allow() {
+fw_ensure() {
   # Pangolin's tunnel uses the 100.64.0.0/10 CGNAT range (interface "pangolin",
   # DNS resolver 100.96.128.1). If Tailscale is also installed it adds a
   # ts-input rule that DROPs any 100.64.0.0/10 source not arriving on its own
   # interface - which silently drops Pangolin's replies (most visibly the DNS
-  # resolver's answers, breaking name resolution). Accept input from our tunnel
-  # interface before that chain runs. Harmless when Tailscale is absent.
-  for ipt in iptables ip6tables; do
-    command -v "$ipt" >/dev/null 2>&1 || continue
-    "$ipt" -C INPUT -i "$IFACE" -j ACCEPT 2>/dev/null || \
-      "$ipt" -I INPUT 1 -i "$IFACE" -j ACCEPT 2>/dev/null
-  done
+  # resolver's answers, breaking name resolution). Our ACCEPT rule therefore
+  # only needs to run *before* the ts-input jump - not sit at position 1, which
+  # would trample unrelated rules other tools deliberately keep above us.
+  # Idempotent: in steady state this is a single read-only "-S INPUT".
+  # $1 = iptables | ip6tables (Tailscale installs ts-input in both).
+  local ipt="$1" rules our ts
+  command -v "$ipt" >/dev/null 2>&1 || return 0
+  rules="$("$ipt" -S INPUT 2>/dev/null | grep '^-A')" || rules=""
+  our="$(grep -nm1 -- "-i $IFACE -j ACCEPT" <<<"$rules" | cut -d: -f1)"
+  ts="$(grep -nm1 -- '-j ts-input' <<<"$rules" | cut -d: -f1)"
+  if [ -z "$ts" ]; then
+    # No Tailscale jump to beat (absent/stopped); the rule just has to exist.
+    [ -n "$our" ] || "$ipt" -A INPUT -i "$IFACE" -j ACCEPT 2>/dev/null
+  elif [ -z "$our" ]; then
+    "$ipt" -I INPUT "$ts" -i "$IFACE" -j ACCEPT 2>/dev/null
+  elif [ "$our" -gt "$ts" ]; then
+    # Re-place directly above ts-input. Deleting our rule first cannot shift
+    # the ts index because our rule sits below it.
+    "$ipt" -D INPUT -i "$IFACE" -j ACCEPT 2>/dev/null
+    "$ipt" -I INPUT "$ts" -i "$IFACE" -j ACCEPT 2>/dev/null
+  fi
+}
+
+fw_allow() {
+  fw_ensure iptables
+  fw_ensure ip6tables
 }
 
 fw_remove() {
@@ -88,11 +107,9 @@ fw_remove() {
 
 fw_heal() {
   # Cheap periodic check (called from cron). Does nothing unless the client is
-  # connected AND our rule has been bumped from the top of INPUT (e.g. after a
-  # Tailscale restart re-inserts its own jump above ours). Only then re-assert.
+  # connected AND our rule has fallen below Tailscale's ts-input jump (e.g.
+  # after a Tailscale restart re-inserts its jump above ours).
   is_running || return 0
-  [ "$(iptables -S INPUT 2>/dev/null | grep -m1 '^-A')" = "-A INPUT -i $IFACE -j ACCEPT" ] && return 0
-  fw_remove
   fw_allow
 }
 

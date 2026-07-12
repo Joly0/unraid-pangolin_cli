@@ -1,5 +1,5 @@
-# Re-assert the Pangolin firewall allowance in case Tailscale (or another
-# tool) re-inserts its own rules above ours after a restart. This is a cheap
-# check: it does nothing unless the client is connected AND our rule has been
-# bumped from the top of the INPUT chain.
+# Re-assert the Pangolin firewall allowance in case Tailscale re-inserts its
+# ts-input jump above our ACCEPT rule after a restart. This is a cheap check:
+# in steady state it is a single read-only "iptables -S INPUT" per address
+# family and changes nothing unless our rule has fallen below ts-input.
 */1 * * * * /etc/rc.d/rc.pangolin fw-heal &> /dev/null
