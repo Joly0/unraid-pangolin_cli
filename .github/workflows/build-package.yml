@@ -1,0 +1,121 @@
+name: Build plugin package
+
+# Manually triggered rebuild of the plugin package, for releases that don't
+# involve a CLI bump (page/service/packaging changes). Bumps the plugin
+# version, prepends a changelog entry, rebuilds the .txz, verifies it, and
+# opens a pull request — the same review-and-merge release flow as the
+# automated CLI updater (this workflow never pushes to main).
+#
+# Requires "Allow GitHub Actions to create and approve pull requests" under
+# Settings > Actions > General > Workflow permissions.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Plugin version (leave empty for today''s date, with a/b/c… suffix on same-day collisions)'
+        required: false
+        default: ''
+      changelog:
+        description: 'Changelog entry text (single line, without the leading "- ")'
+        required: false
+        default: 'Maintenance rebuild.'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine plugin version
+        id: ver
+        run: |
+          set -euo pipefail
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            NEWVER="${{ github.event.inputs.version }}"
+          else
+            # Same collision guard as update-cli.yml: letter suffixes keep
+            # same-day rebuilds from reusing an already-published version.
+            BASE="$(date -u +%Y.%m.%d)"
+            NEWVER="$BASE"
+            SUF=(a b c d e f)
+            i=0
+            while [ -e "packages/pangolin_cli-${NEWVER}.txz" ] || \
+                  grep -q "###${NEWVER}$" pangolin_cli.plg; do
+              if [ "$i" -ge "${#SUF[@]}" ]; then
+                echo "ERROR: exhausted version suffixes for ${BASE}" >&2
+                exit 1
+              fi
+              NEWVER="${BASE}${SUF[$i]}"
+              i=$((i+1))
+            done
+          fi
+          echo "newver=$NEWVER" >> "$GITHUB_OUTPUT"
+          echo "Building plugin version $NEWVER"
+
+      - name: Bump version and rebuild package
+        run: |
+          set -euo pipefail
+          NEWVER="${{ steps.ver.outputs.newver }}"
+
+          sed -i -E "s#(<!ENTITY version\s+\")[^\"]*(\">)#\1${NEWVER}\2#" pangolin_cli.plg
+
+          # Prepend a changelog entry unless this version already has one
+          # (e.g. a re-run with an explicit version).
+          if ! grep -q "###${NEWVER}$" pangolin_cli.plg; then
+            awk -v ver="$NEWVER" -v entry="${{ github.event.inputs.changelog }}" '
+              /<CHANGES>/ && !done { print; print ""; print "###" ver; print "- " entry; done=1; next }
+              { print }
+            ' pangolin_cli.plg > pangolin_cli.plg.tmp && mv pangolin_cli.plg.tmp pangolin_cli.plg
+          fi
+
+          # build.sh refuses to overwrite an existing .txz with different
+          # content — a failure here means the chosen version is already
+          # published; pick another one.
+          bash build.sh
+
+      - name: Verify rebuilt package
+        run: |
+          set -o pipefail
+          bash tests/package-test.sh "packages/pangolin_cli-${{ steps.ver.outputs.newver }}.txz" pangolin_cli.plg 2>&1 | tee test-results.txt
+
+      - name: Create pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          NEWVER="${{ steps.ver.outputs.newver }}"
+          BRANCH="automated/build-${NEWVER}"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add pangolin_cli.plg packages/
+          git commit -m "Build plugin package ${NEWVER}"
+          git push -f -u origin "$BRANCH"
+
+          {
+            echo "On-demand package build: plugin version \`${NEWVER}\`."
+            echo
+            echo "Changelog entry: ${{ github.event.inputs.changelog }}"
+            echo
+            echo "Package verification:"
+            echo
+            echo '```'
+            cat test-results.txt
+            echo '```'
+            echo
+            echo "Review and merge to release. \`packages/pangolin_cli-${NEWVER}.txz\` and the \`pangolin_cli.plg\` MD5 have been rebuilt."
+          } > pr-body.md
+
+          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            echo "PR already open for $BRANCH; branch updated."; exit 0
+          fi
+          gh pr create --base main --head "$BRANCH" \
+            --title "Build plugin package ${NEWVER}" \
+            --body-file pr-body.md

@@ -2,11 +2,11 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name       "pangolin_cli">
   <!ENTITY author     "Joly0">
-  <!ENTITY version    "2026.07.09">
+  <!ENTITY version    "2026.07.12">
   <!ENTITY cliVersion "0.13.0">
   <!ENTITY gitURL     "https://github.com/&author;/unraid-&name;/raw/main">
   <!ENTITY pluginURL  "&gitURL;/&name;.plg">
-  <!ENTITY md5        "d3ba472a3bda32b01d4ae48c81d01e5d">
+  <!ENTITY md5        "892979ecdee2aa51b0bc144b2edd3ee5">
   <!ENTITY binURL     "https://github.com/fosrl/cli/releases/download/&cliVersion;/pangolin-cli_linux_amd64">
   <!ENTITY plugin     "/boot/config/plugins/&name;">
   <!ENTITY emhttp     "/usr/local/emhttp/plugins/&name;">
@@ -17,6 +17,12 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="7.0.0" icon="globe">
 
 <CHANGES>
+
+###2026.07.12
+- Firewall rule now inserts directly above Tailscale's ts-input jump instead of forcing position 1 (no more rule churn; ip6tables covered too).
+- Stop no longer matches unrelated processes; start verifies the connection and the settings page shows a three-state status (connected / starting / stopped).
+- Log viewer: fewer false error highlights and memory-bounded log tailing.
+- Packaging: same-day releases get letter-suffixed versions, hardened install scripts, and older packages on the flash drive are now kept.
 
 ###2026.07.09
 - Fixed: the Connect/Apply buttons did nothing (silently) after a reboot because the webGui service wrapper was packaged without its execute bit. The package now ships it as 0755 and the installer re-asserts the mode on every boot.
