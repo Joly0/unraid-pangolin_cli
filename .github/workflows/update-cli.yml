@@ -101,7 +101,24 @@ jobs:
         run: |
           set -euo pipefail
           LATEST="${{ steps.ver.outputs.latest }}"
-          NEWVER="$(date -u +%Y.%m.%d)"
+
+          # Same-day collision guard: two upstream releases on one day would
+          # otherwise produce the same plugin version (and .txz filename) with
+          # different content/MD5. Unraid compares plugin versions as strings,
+          # so letter suffixes sort correctly after the bare date.
+          BASE="$(date -u +%Y.%m.%d)"
+          NEWVER="$BASE"
+          SUF=(a b c d e f)
+          i=0
+          while [ -e "packages/pangolin_cli-${NEWVER}.txz" ] || \
+                grep -q "###${NEWVER}$" pangolin_cli.plg; do
+            if [ "$i" -ge "${#SUF[@]}" ]; then
+              echo "ERROR: exhausted version suffixes for ${BASE}" >&2
+              exit 1
+            fi
+            NEWVER="${BASE}${SUF[$i]}"
+            i=$((i+1))
+          done
           echo "newver=$NEWVER" >> "$GITHUB_OUTPUT"
 
           # Update the CLI version and the (date-based) plugin version.

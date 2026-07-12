@@ -38,13 +38,6 @@
 
 </CHANGES>
 
-<!-- Remove older packages from the flash drive -->
-<FILE Run="/bin/bash">
-<INLINE>
-rm -f $(ls /boot/config/plugins/&name;/&name;*.txz 2>/dev/null|grep -v '&version;')
-</INLINE>
-</FILE>
-
 <!-- Download and install the webGui package (settings page + service script) -->
 <FILE Name="&plugin;/&name;-&version;.txz" Run="upgradepkg --install-new">
 <URL>&gitURL;/packages/&name;-&version;.txz</URL>
@@ -59,9 +52,8 @@ rm -f $(ls /boot/config/plugins/&name;/&name;*.txz 2>/dev/null|grep -v '&version
 <INLINE>
 mkdir -p &plugin;
 NEED_DOWNLOAD=1
-if [ -s "&binPersist;" ]; then
-  CURRENT="$("&binPersist;" version 2>/dev/null | grep -o '&cliVersion;')"
-  [ -n "$CURRENT" ] &amp;&amp; NEED_DOWNLOAD=0
+if [ -s "&binPersist;" ] &amp;&amp; "&binPersist;" version 2>/dev/null | grep -qwF '&cliVersion;'; then
+  NEED_DOWNLOAD=0
 fi
 if [ "$NEED_DOWNLOAD" = "1" ]; then
   echo "Downloading Pangolin CLI &cliVersion; ..."

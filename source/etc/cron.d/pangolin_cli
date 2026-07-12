@@ -2,4 +2,4 @@
 # ts-input jump above our ACCEPT rule after a restart. This is a cheap check:
 # in steady state it is a single read-only "iptables -S INPUT" per address
 # family and changes nothing unless our rule has fallen below ts-input.
-*/1 * * * * /etc/rc.d/rc.pangolin fw-heal &> /dev/null
+*/1 * * * * /etc/rc.d/rc.pangolin fw-heal >/dev/null 2>&1
