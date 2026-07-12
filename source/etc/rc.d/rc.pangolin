@@ -15,6 +15,12 @@ CFG="/boot/config/plugins/${PLUGIN}/${PLUGIN}.cfg"
 BIN="/usr/local/bin/pangolin"
 PERSIST="/boot/config/plugins/${PLUGIN}/pangolin"
 PIDFILE="/var/run/${PLUGIN}.pid"
+# pgrep/pkill -f patterns (ERE over the full command line), anchored so they
+# only match the service-launched processes (argv[0] is the absolute binary
+# path) - never a user's interactive "pangolin up --help" or an unrelated
+# process that merely mentions the binary path in its arguments.
+PGREP_UP="^${BIN} up( |$)"
+PGREP_WD="^${BIN} watchdog( |$)"
 LOG="/var/log/${PLUGIN}.log"
 RESOLV="/etc/resolv.conf"
 RESOLV_BAK="/var/run/${PLUGIN}.resolv.backup"
@@ -119,7 +125,7 @@ pid_alive() {
 
 is_running() {
   pid_alive && return 0
-  pgrep -f "${BIN} up" >/dev/null 2>&1
+  pgrep -f "$PGREP_UP" >/dev/null 2>&1
 }
 
 start() {
@@ -157,14 +163,27 @@ start() {
     --secret "$CLIENT_SECRET" \
     --attach $dns_flag $EXTRA_ARGS >> "$LOG" 2>&1 &
   echo $! > "$PIDFILE"
-  sleep 2
-  if is_running; then
-    echo "Pangolin CLI connected"
-  else
-    echo "Pangolin CLI failed to start - check ${LOG}"
-    rm -f "$PIDFILE"
-    return 1
-  fi
+  # A live process is not a connection (an auth failure keeps it running while
+  # it retries), so poll the client's own status until it reports connected or
+  # the process dies. On timeout with the process still alive, report neutrally
+  # and exit 0 - autostart on a slow WAN must not hang or false-fail.
+  # Note: "status client --json" exits 0 even when the client is down (printing
+  # "No client is currently running"), so only the JSON content is trusted.
+  local tries=0
+  while [ "$tries" -lt 30 ]; do
+    sleep 0.5
+    if ! is_running; then
+      echo "Pangolin CLI failed to start - check ${LOG}"
+      rm -f "$PIDFILE"
+      return 1
+    fi
+    if "$BIN" status client --json 2>/dev/null | grep -q '"connected": *true'; then
+      echo "Pangolin CLI connected"
+      return 0
+    fi
+    tries=$((tries+1))
+  done
+  echo "Pangolin CLI started - still connecting, check ${LOG}"
 }
 
 stop() {
@@ -172,16 +191,16 @@ stop() {
   log_marker "Pangolin client disconnecting"
   [ -x "$BIN" ] && "$BIN" down >/dev/null 2>&1
   # Kill the watchdog first - otherwise it respawns the client we are stopping.
-  pkill -f "${BIN} watchdog" 2>/dev/null
+  pkill -f "$PGREP_WD" 2>/dev/null
   if [ -f "$PIDFILE" ]; then
     kill "$(cat "$PIDFILE" 2>/dev/null)" 2>/dev/null
     rm -f "$PIDFILE"
   fi
-  pkill -f "${BIN} up" 2>/dev/null
+  pkill -f "$PGREP_UP" 2>/dev/null
   # Force-kill anything still alive after a short grace period.
   sleep 1
-  pkill -9 -f "${BIN} watchdog" 2>/dev/null
-  pkill -9 -f "${BIN} up" 2>/dev/null
+  pkill -9 -f "$PGREP_WD" 2>/dev/null
+  pkill -9 -f "$PGREP_UP" 2>/dev/null
   # Safety net: if the client left the resolver pointing at its own DNS manager
   # (its restore can fail), put our backed-up resolv.conf back so the server
   # keeps working DNS after disconnect.

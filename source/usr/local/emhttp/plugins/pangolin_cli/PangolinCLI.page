@@ -21,6 +21,11 @@ require_once "$docroot/plugins/$plugin/include/log.php";
 $installed = is_file($bin);
 $cliVer    = $installed ? trim(shell_exec("$bin version 2>/dev/null | head -n1")) : _("not installed");
 $running   = trim(shell_exec("$rc status 2>/dev/null | tail -n1")) == "running";
+/* A running process is not a working tunnel (e.g. wrong secret keeps the
+ * client retrying), so ask the client itself. "status client --json" prints
+ * a non-JSON notice and exits 0 when the client is down, so only a matched
+ * "connected": true counts. */
+$connected = $running && preg_match('/"connected":\s*true/', (string)shell_exec("$bin status client --json 2>/dev/null"));
 $details   = $running ? htmlspecialchars(shell_exec("$bin status 2>/dev/null")) : "";
 $logLines  = pangolin_log_tail(50);
 $logHtml   = pangolin_log_render($logLines);
@@ -32,8 +37,20 @@ $AUTOSTART     = ($cfg['AUTOSTART'] ?? 'no');
 $OVERRIDE_DNS  = ($cfg['OVERRIDE_DNS'] ?? 'yes');
 $EXTRA_ARGS    = htmlspecialchars($cfg['EXTRA_ARGS']    ?? '');
 
-$stateColor = $running ? 'green-text'  : 'orange-text';
-$stateText  = $running ? _('Connected') : _('Disconnected');
+if ($connected) {
+  $stateColor = 'green-text';
+  $stateStyle = '';
+  $stateText  = _('Connected');
+} elseif ($running) {
+  // The theme has no yellow-text class; use its yellow variable directly.
+  $stateColor = '';
+  $stateStyle = 'color:var(--yellow-500);';
+  $stateText  = _('Starting / not connected');
+} else {
+  $stateColor = 'orange-text';
+  $stateStyle = '';
+  $stateText  = _('Disconnected');
+}
 $fieldStyle = 'width:360px;max-width:100%;';
 ?>
 
@@ -43,7 +60,7 @@ $fieldStyle = 'width:360px;max-width:100%;';
 <input type="hidden" name="#arg[1]"  id="rcArg" value="apply">
 
 _(Status)_:
-: <span class="<?=$stateColor?>" style="font-weight:bold;"><i class="fa fa-circle"></i> <?=$stateText?></span> &nbsp; <span style="opacity:.7;"><?=_('Version')?>: <?=$cliVer?></span>
+: <span class="<?=$stateColor?>" style="font-weight:bold;<?=$stateStyle?>"><i class="fa fa-circle"></i> <?=$stateText?></span> &nbsp; <span style="opacity:.7;"><?=_('Version')?>: <?=$cliVer?></span>
 
 _(Pangolin endpoint URL)_:
 : <input type="text" name="ENDPOINT" style="<?=$fieldStyle?>" value="<?=$ENDPOINT?>" placeholder="https://pangolin.example.com">
