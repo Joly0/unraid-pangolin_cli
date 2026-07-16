@@ -2,11 +2,11 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name       "pangolin_cli">
   <!ENTITY author     "Joly0">
-  <!ENTITY version    "2026.07.12">
-  <!ENTITY cliVersion "0.13.0">
+  <!ENTITY version    "2026.07.16">
+  <!ENTITY cliVersion "0.14.0">
   <!ENTITY gitURL     "https://github.com/&author;/unraid-&name;/raw/main">
   <!ENTITY pluginURL  "&gitURL;/&name;.plg">
-  <!ENTITY md5        "892979ecdee2aa51b0bc144b2edd3ee5">
+  <!ENTITY md5        "5ad3d6d75dae01db367c101eb49d400e">
   <!ENTITY binURL     "https://github.com/fosrl/cli/releases/download/&cliVersion;/pangolin-cli_linux_amd64">
   <!ENTITY plugin     "/boot/config/plugins/&name;">
   <!ENTITY emhttp     "/usr/local/emhttp/plugins/&name;">
@@ -17,6 +17,9 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="7.0.0" icon="globe">
 
 <CHANGES>
+
+###2026.07.16
+- Updated Pangolin CLI to 0.14.0.
 
 ###2026.07.12
 - Firewall rule now inserts directly above Tailscale's ts-input jump instead of forcing position 1 (no more rule churn; ip6tables covered too).
