@@ -95,6 +95,56 @@ jobs:
           gh issue create --title "$TITLE" --body-file issue-body.md
           exit 1   # flag the run as failed so it's visible
 
+      # Pull the upstream "What's Changed" notes so the plugin changelog can
+      # tell users what actually changed in the CLI, not just the version bump.
+      - name: Collect Pangolin CLI release notes
+        id: notes
+        if: steps.ver.outputs.update == 'true' && steps.smoke.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          CURRENT="${{ steps.ver.outputs.current }}"
+          LATEST="${{ steps.ver.outputs.latest }}"
+
+          # Every fosrl/cli release newer than the version we currently ship, up
+          # to and including the one we're bumping to, oldest first. Normally a
+          # single release, but a missed run or a forced jump can span several.
+          mapfile -t ALL < <(gh api repos/fosrl/cli/releases --paginate --jq '.[].tag_name' || true)
+          SELECTED=()
+          for t in "${ALL[@]:-}"; do
+            [ -z "$t" ] && continue
+            [ "$t" = "$CURRENT" ] && continue
+            # newer than CURRENT and not newer than LATEST?
+            [ "$(printf '%s\n%s\n' "$CURRENT" "$t" | sort -V | tail -n1)" = "$t" ] || continue
+            [ "$(printf '%s\n%s\n' "$LATEST"  "$t" | sort -V | tail -n1)" = "$LATEST" ] || continue
+            SELECTED+=("$t")
+          done
+          # Fall back to just LATEST if the release list was empty or didn't list it
+          # (e.g. a forced tag or an API hiccup).
+          [ ${#SELECTED[@]} -eq 0 ] && SELECTED=("$LATEST")
+          IFS=$'\n' SELECTED=($(printf '%s\n' "${SELECTED[@]}" | sort -V)); unset IFS
+
+          multi=0; [ ${#SELECTED[@]} -gt 1 ] && multi=1
+          : > cli-notes.md
+          for t in "${SELECTED[@]}"; do
+            BODY="$(gh api "repos/fosrl/cli/releases/tags/$t" --jq '.body' 2>/dev/null || true)"
+            # Keep only the "What's Changed" bullets; drop container-image lines,
+            # the Full Changelog link, and any other headings.
+            NOTES="$(printf '%s\n' "$BODY" \
+              | sed -n "/^##[[:space:]]*What.s Changed/,/^##/p" \
+              | grep -E '^[[:space:]]*[-*][[:space:]]' \
+              | grep -viE 'ghcr\.io|docker\.io|full changelog' \
+              | sed -E 's/^[[:space:]]*[-*][[:space:]]*/- /' || true)"
+            if [ "$multi" = "1" ]; then
+              printf -- '- CLI %s:\n' "$t" >> cli-notes.md
+              [ -n "$NOTES" ] && printf '%s\n' "$NOTES" | sed -E 's/^/  /' >> cli-notes.md
+            else
+              [ -n "$NOTES" ] && printf '%s\n' "$NOTES" >> cli-notes.md
+            fi
+          done
+          echo "Collected CLI release notes:"; cat cli-notes.md || true
+
       - name: Bump version and rebuild package
         id: build
         if: steps.ver.outputs.update == 'true' && steps.smoke.outcome == 'success'
@@ -125,9 +175,26 @@ jobs:
           sed -i -E "s#(<!ENTITY cliVersion\s+\")[^\"]*(\">)#\1${LATEST}\2#" pangolin_cli.plg
           sed -i -E "s#(<!ENTITY version\s+\")[^\"]*(\">)#\1${NEWVER}\2#" pangolin_cli.plg
 
-          # Prepend a changelog entry.
-          awk -v ver="$NEWVER" -v cli="$LATEST" '
-            /<CHANGES>/ && !done { print; print ""; print "###" ver; print "- Updated Pangolin CLI to " cli "."; done=1; next }
+          # Build the changelog entry, folding in the upstream CLI release notes
+          # collected in the previous step (falls back to a plain bump line if
+          # none were found).
+          {
+            echo "###${NEWVER}"
+            if [ -s cli-notes.md ]; then
+              echo "- Updated Pangolin CLI to ${LATEST}. Changes from the Pangolin CLI:"
+              sed -E 's/^/  /' cli-notes.md
+            else
+              echo "- Updated Pangolin CLI to ${LATEST}."
+            fi
+          } > changelog-entry.txt
+
+          # Prepend the entry just below the <CHANGES> tag.
+          awk '
+            /<CHANGES>/ && !done {
+              print; print "";
+              while ((getline line < "changelog-entry.txt") > 0) print line;
+              done=1; next
+            }
             { print }
           ' pangolin_cli.plg > pangolin_cli.plg.tmp && mv pangolin_cli.plg.tmp pangolin_cli.plg
 
@@ -162,6 +229,12 @@ jobs:
           {
             echo "Automated update: **Pangolin CLI ${LATEST}** (plugin version \`${NEWVER}\`)."
             echo
+            if [ -s cli-notes.md ]; then
+              echo "### Changes from the Pangolin CLI"
+              echo
+              cat cli-notes.md
+              echo
+            fi
             echo "The new binary passed the plugin smoke test:"
             echo
             echo '```'
