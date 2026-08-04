@@ -2,11 +2,11 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name       "pangolin_cli">
   <!ENTITY author     "Joly0">
-  <!ENTITY version    "2026.07.20">
-  <!ENTITY cliVersion "0.15.0">
+  <!ENTITY version    "2026.08.04">
+  <!ENTITY cliVersion "0.15.1">
   <!ENTITY gitURL     "https://github.com/&author;/unraid-&name;/raw/main">
   <!ENTITY pluginURL  "&gitURL;/&name;.plg">
-  <!ENTITY md5        "6cdad8762d6dfc7245cb6a72c2c89ab9">
+  <!ENTITY md5        "c7bdd4b62c67e77f2b77766e1fd4f173">
   <!ENTITY binURL     "https://github.com/fosrl/cli/releases/download/&cliVersion;/pangolin-cli_linux_amd64">
   <!ENTITY plugin     "/boot/config/plugins/&name;">
   <!ENTITY emhttp     "/usr/local/emhttp/plugins/&name;">
@@ -17,6 +17,12 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="7.0.0" icon="globe">
 
 <CHANGES>
+
+###2026.08.04
+- Updated Pangolin CLI to 0.15.1. Changes from the Pangolin CLI:
+  - Fix some websocket disconnections by adding deadlines to websocket
+  - Fix local to relay flapping if there is an overlapping CIDR route with a site local address
+  - Support -i in the native Pangolin ssh command
 
 ###2026.07.20
 - Updated Pangolin CLI to 0.15.0.
