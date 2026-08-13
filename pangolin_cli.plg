@@ -2,11 +2,11 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name       "pangolin_cli">
   <!ENTITY author     "Joly0">
-  <!ENTITY version    "2026.08.04">
+  <!ENTITY version    "2026.08.13">
   <!ENTITY cliVersion "0.15.1">
   <!ENTITY gitURL     "https://github.com/&author;/unraid-&name;/raw/main">
   <!ENTITY pluginURL  "&gitURL;/&name;.plg">
-  <!ENTITY md5        "c7bdd4b62c67e77f2b77766e1fd4f173">
+  <!ENTITY md5        "8c5c3d1eedc61b6b41632bbb7d5ad31a">
   <!ENTITY binURL     "https://github.com/fosrl/cli/releases/download/&cliVersion;/pangolin-cli_linux_amd64">
   <!ENTITY plugin     "/boot/config/plugins/&name;">
   <!ENTITY emhttp     "/usr/local/emhttp/plugins/&name;">
@@ -17,6 +17,12 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="7.0.0" icon="globe">
 
 <CHANGES>
+
+###2026.08.13
+- Settings page now shares a single "Pangolin" entry with the Pangolin Newt plugin when both are installed, with a tab for each. Installed on its own, this plugin keeps its own entry as before.
+- Log viewer: a line's own level marker now decides its colour, so routine "WARN: ... failed" reconnect messages are no longer highlighted as errors.
+- The Connect/Disconnect/Apply buttons target their own form, so they keep working when both Pangolin plugins share the grouped Settings entry as tabs.
+- Connecting no longer freezes the webGui: /update.php holds the PHP session lock for the whole request, so connecting now runs in the background and the page reports progress via its status line.
 
 ###2026.08.04
 - Updated Pangolin CLI to 0.15.1. Changes from the Pangolin CLI:
