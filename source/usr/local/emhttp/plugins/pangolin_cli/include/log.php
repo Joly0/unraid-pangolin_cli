@@ -29,16 +29,30 @@ function pangolin_log_files(): array {
  * are deliberately not matched - they flagged byte counts and normal
  * reconnect chatter as errors. */
 function pangolin_log_class(string $line): string {
-    $patterns = [
-        'pangolin-connect'    => '/====\s*pangolin (client )?(connect|start|up)/i',
-        'pangolin-disconnect' => '/====\s*pangolin (client )?(disconnect|stop|down)/i',
-        'error' => '/^(erro|error|fatal|panic):?\s|\b(error|fatal|panic|failed|failure|refused|denied|unauthorized|forbidden)\b/i',
-        'warn'  => '/^(warn|warning):?\s|\b(warn(ing)?|deprecated)\b/i',
-    ];
-    foreach ($patterns as $class => $re) {
-        if (preg_match($re, $line)) {
-            return $class;
-        }
+    /* Markers first: they are ours and unambiguous. */
+    if (preg_match('/====\s*pangolin (client )?(connect|start|up)/i', $line)) {
+        return 'pangolin-connect';
+    }
+    if (preg_match('/====\s*pangolin (client )?(disconnect|stop|down)/i', $line)) {
+        return 'pangolin-disconnect';
+    }
+    /* Then the level token, which is authoritative and must beat any keyword
+     * in the message body. The client logs lines like "WARN: ... ping failed"
+     * during ordinary transient reconnects; matching the word "failed" first
+     * would paint routine chatter red, which is exactly the false-positive
+     * problem the keyword list below was already trimmed to avoid. */
+    if (preg_match('/^(erro|error|fatal|panic):?\s/i', $line))  return 'error';
+    if (preg_match('/^(warn|warning):?\s/i', $line))            return 'warn';
+    if (preg_match('/^(info|debug|trace):?\s/i', $line))        return 'text';
+    /* No level token: a line relayed from elsewhere, or one of our own plain
+     * messages. Fall back to keywords. Bare 4xx/5xx numbers and routine words
+     * (retry, timeout, cannot) are deliberately not matched - they flagged
+     * byte counts and normal reconnect chatter as errors. */
+    if (preg_match('/\b(error|fatal|panic|failed|failure|refused|denied|unauthorized|forbidden)\b/i', $line)) {
+        return 'error';
+    }
+    if (preg_match('/\b(warn(ing)?|deprecated)\b/i', $line)) {
+        return 'warn';
     }
     return 'text';
 }
