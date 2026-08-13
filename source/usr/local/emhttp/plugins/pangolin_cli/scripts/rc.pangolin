@@ -3,7 +3,47 @@
 # webGui wrapper for the Pangolin CLI service control.
 #
 # /update.php only runs a #command that resolves inside the webGui docroot
-# (/usr/local/emhttp), so the settings page calls this wrapper, which simply
-# forwards to the real service script in /etc/rc.d.
+# (/usr/local/emhttp), so the settings page calls this wrapper, which forwards
+# to the real service script in /etc/rc.d.
 #
-exec /etc/rc.d/rc.pangolin "$@"
+# It also decides what may run in the foreground. /update.php executes this
+# synchronously, and PHP holds the session lock for the whole request, so a
+# slow command freezes the *entire* webGui - every other page, not just this
+# one - until it returns. Connecting is slow by nature here: rc.pangolin polls
+# the client's own status for up to 15 seconds to confirm the tunnel really
+# came up. So connects are detached and the settings page reports progress
+# through its own status line instead of holding the browser hostage.
+#
+RC="/etc/rc.d/rc.pangolin"
+LOG="/var/log/pangolin_cli.log"
+
+detach() {
+  # setsid plus full redirection: no descriptor may stay attached to the web
+  # server, or the HTTP request stays open and the freeze happens anyway.
+  # Output still goes to the log so a failed connect is not lost.
+  setsid "$RC" "$@" >> "$LOG" 2>&1 < /dev/null &
+}
+
+case "$1" in
+  start|restart)
+    detach "$1"
+    echo "Connecting in the background - this can take a few moments."
+    echo "Refresh the page to see the current status."
+    ;;
+  apply)
+    # Fast path: with nothing running, apply only saves settings, so run it in
+    # the foreground and keep its (useful) message. While running, apply
+    # reconnects the client and is exactly as slow as a connect.
+    if [ "$("$RC" status 2>/dev/null | tail -n1)" = "stopped" ]; then
+      exec "$RC" apply
+    fi
+    detach apply
+    echo "Reconnecting with the new settings in the background."
+    echo "Refresh the page to see the current status."
+    ;;
+  *)
+    # stop/status and friends are quick; run them inline so the page shows the
+    # real result straight away.
+    exec "$RC" "$@"
+    ;;
+esac

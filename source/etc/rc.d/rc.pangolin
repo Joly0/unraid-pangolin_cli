@@ -225,7 +225,11 @@ case "$1" in
   start)     start ;;
   stop)      stop ;;
   restart)   stop; sleep 1; start ;;
-  apply)     if is_running; then stop; sleep 1; start; else echo "Settings saved"; fi ;;
+  # "apply" saves settings and makes a *running* client pick them up. When
+  # nothing is running it deliberately does not connect - but say so, because
+  # "Settings saved" on its own reads like the connection was made too, and
+  # nothing is written to the log to suggest otherwise.
+  apply)     if is_running; then stop; sleep 1; start; else echo "Settings saved - press Connect to connect"; fi ;;
   status)    status ;;
   autostart) [ "$AUTOSTART" = "yes" ] && start || echo "Autostart is disabled" ;;
   fw-heal)   fw_heal ;;
