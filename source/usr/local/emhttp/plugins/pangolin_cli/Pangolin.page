@@ -1,0 +1,6 @@
+Menu="NetworkServices"
+Type="xmenu"
+Title="Pangolin"
+Icon="pangolin.png"
+Cond="file_exists('/usr/local/emhttp/plugins/pangolin_cli/PangolinCLITab.page') && file_exists('/usr/local/emhttp/plugins/pangolin_newt/PangolinNewtTab.page')"
+---

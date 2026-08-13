@@ -27,11 +27,18 @@ bad()  { printf 'FAIL: %s\n' "$*"; fail=1; }
 LISTING="$(tar -tvf "$TXZ" 2>/dev/null)"
 [ -n "$LISTING" ] || { echo "FAIL: cannot list archive contents of $TXZ"; exit 1; }
 
-# 1. Files the plugin cannot work without.
+# 1. Files the plugin cannot work without. All three page files count: dropping
+#    the tab or the group page would not fail an install, it would quietly
+#    break the shared "Pangolin" Settings entry (and the Newt plugin's half of
+#    it) in a way that is only visible in the webGui.
 for req in \
   ./etc/rc.d/rc.pangolin \
   ./usr/local/emhttp/plugins/pangolin_cli/scripts/rc.pangolin \
-  ./usr/local/emhttp/plugins/pangolin_cli/PangolinCLI.page
+  ./usr/local/emhttp/plugins/pangolin_cli/PangolinCLI.page \
+  ./usr/local/emhttp/plugins/pangolin_cli/PangolinCLITab.page \
+  ./usr/local/emhttp/plugins/pangolin_cli/Pangolin.page \
+  ./usr/local/emhttp/plugins/pangolin_cli/include/settings.php \
+  ./usr/local/emhttp/plugins/pangolin_cli/include/log.php
 do
   if grep -q " ${req}$" <<<"$LISTING"; then
     pass "present: ${req}"

@@ -19,6 +19,14 @@ https://github.com/Joly0/unraid-pangolin_cli/raw/main/pangolin_cli.plg
 
 The `pangolin` binary is also available from the Unraid terminal.
 
+## Shared Settings entry
+
+When the [Pangolin Newt plugin](https://github.com/Joly0/unraid-pangolin_newt) is installed alongside this one, the two collapse into a single **Settings > Pangolin** entry with a **CLI** and a **Newt** tab, rather than taking two slots in Network Services. Install either one on its own and it keeps its own entry.
+
+This works through Unraid's native page mechanism, with no coordination at install time: each plugin ships three `.page` files (a standalone entry, a tab, and an identical copy of the shared group container), and each one's `Cond=` tests whether the *other* plugin's tab page is present. Removing either plugin restores the other's standalone entry automatically. Testing for the tab file rather than the plugin directory means an older, pre-grouping version of the other plugin is also handled: both simply keep their own entry.
+
+Because both `.page` files render the same shared body (`include/settings.php`), the form itself exists only once. The wrappers reproduce Unraid's own render order (Markdown first, then evaluate the PHP) so the page is identical either way.
+
 ## How it works
 
 - The webGui files (settings page + `/etc/rc.d/rc.pangolin` service script) ship in a Slackware `.txz` package under `packages/`, reinstalled on every boot.
@@ -46,7 +54,13 @@ source/
   etc/rc.d/rc.pangolin                             service control (start/stop/status)
   install/slack-desc                               Slackware package metadata
   usr/local/emhttp/plugins/pangolin_cli/
-    PangolinCLI.page                               Settings page
+    Pangolin.page                                  shared "Pangolin" group (both plugins ship this)
+    PangolinCLI.page                               standalone Settings entry
+    PangolinCLITab.page                            tab inside the shared group
+    include/settings.php                           the settings form, rendered by both of the above
+    include/log.php                                log tail + colour-coding helpers
+    include/logwin.php                             full-log popup
+    scripts/rc.pangolin                            webGui wrapper for /update.php
     README.md                                      plugin description
 ```
 

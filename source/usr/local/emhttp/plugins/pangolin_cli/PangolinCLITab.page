@@ -1,0 +1,19 @@
+Menu="Pangolin:1"
+Title="CLI"
+Tag="desktop"
+Markdown="false"
+Cond="file_exists('/usr/local/emhttp/plugins/pangolin_newt/PangolinNewtTab.page')"
+---
+<?
+/* Pangolin CLI - grouped Settings tab.
+ *
+ * The mirror image of PangolinCLI.page: shown only when the Pangolin Newt
+ * plugin is installed, in which case both plugins fold into the shared
+ * "Pangolin" group (Pangolin.page) as tabs. Renders the same shared body, the
+ * same way - see the comment in PangolinCLI.page for why it is an eval and not
+ * an include.
+ */
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+$evalFile    = "$docroot/plugins/pangolin_cli/include/settings.php";
+$evalContent = '?>'.Markdown(parse_text(file_get_contents($evalFile)));
+include "$docroot/webGui/include/DefaultPageLayout/evalContent.php";

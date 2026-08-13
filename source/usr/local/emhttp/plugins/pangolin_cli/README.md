@@ -8,6 +8,8 @@ Configure it under **Settings > Pangolin CLI**:
 
 The CLI is also available from the Unraid terminal as `pangolin`.
 
+If the [Pangolin Newt plugin](https://github.com/Joly0/unraid-pangolin_newt) is installed too, both share a single **Pangolin** entry in Settings with a tab each.
+
 Source: https://github.com/fosrl/cli
 
 ---
