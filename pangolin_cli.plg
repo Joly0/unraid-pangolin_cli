@@ -2,11 +2,11 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name       "pangolin_cli">
   <!ENTITY author     "Joly0">
-  <!ENTITY version    "2026.08.13a">
+  <!ENTITY version    "2026.08.15">
   <!ENTITY cliVersion "0.15.1">
   <!ENTITY gitURL     "https://github.com/&author;/unraid-&name;/raw/main">
   <!ENTITY pluginURL  "&gitURL;/&name;.plg">
-  <!ENTITY md5        "5e27ed660896ab46dfd9198e0ad29c3b">
+  <!ENTITY md5        "7d4e6e94ad2c877f85711a508bacdc2f">
   <!ENTITY binURL     "https://github.com/fosrl/cli/releases/download/&cliVersion;/pangolin-cli_linux_amd64">
   <!ENTITY plugin     "/boot/config/plugins/&name;">
   <!ENTITY emhttp     "/usr/local/emhttp/plugins/&name;">
@@ -26,6 +26,9 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="7.0.0" launch="Settings/PangolinCLI" icon="pangolin_cli.png" support="https://forums.unraid.net/topic/199839-plugin-pangolin-cli/">
 
 <CHANGES>
+
+###2026.08.15
+- Fixed the daily "Potentially dangerous mode on pangolin_cli: 0666" cron mail. The plugin's logrotate and cron entries were installed world-writable, so logrotate refused them and /var/log/pangolin_cli.log was never rotated. Upgrading also repairs the permissions of an existing install.
 
 ###2026.08.13a
 - Plugins page: the plugin icon is now the Pangolin logo and links to its settings page.
@@ -117,6 +120,10 @@ echo "Pangolin CLI installed: $("&binTarget;" version 2>/dev/null | head -n1)"
 # The webGui wrapper must be executable for /update.php to run it; assert it
 # on every (re)install as a safety net in case a package lost the exec bit.
 chmod 755 &emhttp;/scripts/rc.pangolin 2>/dev/null
+# logrotate and crond both refuse a config file that is group- or
+# other-writable. Packages up to 2026.08.13a shipped these as 0666, so fix the
+# installed copies directly rather than relying on the package modes alone.
+chmod 644 /etc/logrotate.d/&name; /etc/cron.d/&name; 2>/dev/null
 if [ -x /etc/rc.d/rc.pangolin ]; then
   /etc/rc.d/rc.pangolin autostart 2>/dev/null
 fi

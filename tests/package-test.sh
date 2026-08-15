@@ -65,7 +65,21 @@ while IFS= read -r line; do
   fi
 done <<<"$LISTING"
 
-# 3. Slackware packages must be owned by root (build.sh passes --owner/--group,
+# 3. Nothing may be group- or other-writable. The working copy lives on a share
+#    that reports 0666/0777, so without build.sh's --mode=go-w the whole tree
+#    ships world-writable. logrotate and crond both refuse a config file in that
+#    state ("Ignoring pangolin_cli because it is writable by group or others"),
+#    which mails a daily cron error to every user and stops the log rotating.
+#    Mode field is "drwxrwxrwx": char 6 is the group write bit, char 9 other.
+WRITABLE="$(awk 'substr($1,6,1)=="w" || substr($1,9,1)=="w"' <<<"$LISTING")"
+if [ -z "$WRITABLE" ]; then
+  pass "no group/other-writable files or directories"
+else
+  bad "group/other-writable entries (logrotate and crond reject these):"
+  printf '%s\n' "$WRITABLE"
+fi
+
+# 4. Slackware packages must be owned by root (build.sh passes --owner/--group,
 #    but guard against a manual tar invocation leaking share users like smb_user).
 NONROOT="$(awk '$2 != "root/root"' <<<"$LISTING")"
 if [ -z "$NONROOT" ]; then
@@ -75,7 +89,7 @@ else
   printf '%s\n' "$NONROOT"
 fi
 
-# 4. The MD5 entity in the .plg must match the package, or installs abort at
+# 5. The MD5 entity in the .plg must match the package, or installs abort at
 #    the checksum. Only meaningful for the package the .plg currently points
 #    at, so skip the check for older archives kept in packages/.
 if [ -f "$PLG" ]; then

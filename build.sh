@@ -35,8 +35,17 @@ chmod 0755 "${SRC}/etc/rc.d/rc.pangolin" \
 # Build the package. Slackware packages are xz tarballs rooted at /.
 # Pack to a temp file first so an existing (possibly published) .txz is never
 # clobbered before the overwrite guard below has compared it.
+#
+# --mode=go-w strips the group/other write bits from every archived member.
+# The working copy sits on a share that reports 0666 for files and 0777 for
+# directories, and tar otherwise packs exactly that, so installs ended up with
+# a world-writable /etc/logrotate.d/pangolin_cli. logrotate refuses such a
+# config outright ("Ignoring pangolin_cli because it is writable by group or
+# others"), which both mails the daily cron error to the user and leaves the
+# log unrotated. The change is symbolic, so the exec bits set above survive,
+# and it applies only to the archive - the working copy is left alone.
 echo "Building ${TXZ} ..."
-( cd "$SRC" && tar --owner=0 --group=0 -cJf "${TXZ}.tmp" . )
+( cd "$SRC" && tar --owner=0 --group=0 --mode='go-w' -cJf "${TXZ}.tmp" . )
 
 if [ -e "$TXZ" ] && [ "$FORCE" = "0" ]; then
   OLD_MD5="$(md5sum "$TXZ" | cut -d' ' -f1)"
