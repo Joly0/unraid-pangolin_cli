@@ -2,11 +2,11 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name       "pangolin_cli">
   <!ENTITY author     "Joly0">
-  <!ENTITY version    "2026.08.15">
-  <!ENTITY cliVersion "0.15.1">
+  <!ENTITY version    "2026.08.22">
+  <!ENTITY cliVersion "0.16.0">
   <!ENTITY gitURL     "https://github.com/&author;/unraid-&name;/raw/main">
   <!ENTITY pluginURL  "&gitURL;/&name;.plg">
-  <!ENTITY md5        "7d4e6e94ad2c877f85711a508bacdc2f">
+  <!ENTITY md5        "ce0150f0717b26dfc4cb40879744698f">
   <!ENTITY binURL     "https://github.com/fosrl/cli/releases/download/&cliVersion;/pangolin-cli_linux_amd64">
   <!ENTITY plugin     "/boot/config/plugins/&name;">
   <!ENTITY emhttp     "/usr/local/emhttp/plugins/&name;">
@@ -26,6 +26,11 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="7.0.0" launch="Settings/PangolinCLI" icon="pangolin_cli.png" support="https://forums.unraid.net/topic/199839-plugin-pangolin-cli/">
 
 <CHANGES>
+
+###2026.08.22
+- Updated Pangolin CLI to 0.16.0. Changes from the Pangolin CLI:
+  - Add support for Pangolin (>= 1.22.0) AI Gateway private resources
+  - Add support for configuring common AI clients to connect to Pangolin AI Gateway resources
 
 ###2026.08.15
 - Fixed the daily "Potentially dangerous mode on pangolin_cli: 0666" cron mail. The plugin's logrotate and cron entries were installed world-writable, so logrotate refused them and /var/log/pangolin_cli.log was never rotated. Upgrading also repairs the permissions of an existing install.
