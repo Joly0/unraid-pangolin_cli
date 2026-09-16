@@ -2,11 +2,11 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name       "pangolin_cli">
   <!ENTITY author     "Joly0">
-  <!ENTITY version    "2026.08.22">
-  <!ENTITY cliVersion "0.16.0">
+  <!ENTITY version    "2026.09.16">
+  <!ENTITY cliVersion "0.17.0">
   <!ENTITY gitURL     "https://github.com/&author;/unraid-&name;/raw/main">
   <!ENTITY pluginURL  "&gitURL;/&name;.plg">
-  <!ENTITY md5        "ce0150f0717b26dfc4cb40879744698f">
+  <!ENTITY md5        "2058fe599c27b217eb09f2b72f9e6052">
   <!ENTITY binURL     "https://github.com/fosrl/cli/releases/download/&cliVersion;/pangolin-cli_linux_amd64">
   <!ENTITY plugin     "/boot/config/plugins/&name;">
   <!ENTITY emhttp     "/usr/local/emhttp/plugins/&name;">
@@ -26,6 +26,14 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="7.0.0" launch="Settings/PangolinCLI" icon="pangolin_cli.png" support="https://forums.unraid.net/topic/199839-plugin-pangolin-cli/">
 
 <CHANGES>
+
+###2026.09.16
+- Updated Pangolin CLI to 0.17.0. Changes from the Pangolin CLI:
+  - Add site support with `pangolin up site`
+  - Support machine client use on Windows
+  - Add service management support on Windows, Linux, MacOS for sites and clients `pangolin service install site/client`
+  - Improve login command when already logged in  
+  - Update dependencies
 
 ###2026.08.22
 - Updated Pangolin CLI to 0.16.0. Changes from the Pangolin CLI:
